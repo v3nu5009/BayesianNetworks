@@ -77,7 +77,7 @@ id_testResult = idg.addChanceNode(test)
 
 # Symptoms of crc
 sym_names = ["ChangeBowel","Distress","Pain","WeightLoss","Fatigue","Nausea","Vomiting"]
-sym_ids = ["ChangeBowel": None, "Distress": None, "Pain": None, "Weightloss": None, "Fatigue": None, "Nausea": None, "Vominting": None]
+sym_ids = {"ChangeBowel": None, "Distress": None, "Pain": None, "Weightloss": None, "Fatigue": None, "Nausea": None, "Vomiting": None}
 for s in sym_names:
     v = gum.LabelizedVariable(s,s,2); v.changeLabel(0,"No"); v.changeLabel(1,"Yes")
     sym_ids[s] = idg.addChanceNode(v)
@@ -253,20 +253,65 @@ idg.cpt(id_testResult).fillWith(pot_test)
 # 7) Adverse events after treatment (age-stratified, calibrated)
 # -------------------------
 # Overall moderate-to-severe toxicity ≈45.7% (CJ Han 2024). Age≥70 has OR≈2.15 for grade ≥3 AEs (McCleary 2022).
-p_adv_by_age = {
-    "30–59": 0.4337,
-    "60–69": 0.4337,
-    "70–79": 0.6222,
-    "80+":   0.6222,
+# p_adv_by_age = {
+#     "30–59": 0.4337,
+#     "60–69": 0.4337,
+#     "70–79": 0.6222,
+#     "80+":   0.6222,
+# }
+
+# pot_adv = gum.Potential().add(idg.variable("TreatNow")).add(idg.variable("Age")).add(idg.variable("Adverse"))
+# for i_t, tlab in enumerate(["No","Yes"]):
+#     for i_a, alab in enumerate(["30–59","60–69","70–79","80+"]):
+#         p_adv = 0.0 if tlab=="No" else p_adv_by_age[alab]
+#         pot_adv[{"TreatNow":i_t,"Age":i_a,"Adverse":0}] = 1 - p_adv
+#         pot_adv[{"TreatNow":i_t,"Age":i_a,"Adverse":1}] = p_adv
+# idg.setCPT("Adverse",pot_adv)
+
+# ============================================================
+# 7) Adverse events after treatment  (age-specific, from JAMA NO 2023)
+# ============================================================
+# Source: Meng et al., JAMA Network Open 2023: age-stratified grade 3–5 rates for
+# severe abdominal pain, anemia, rash, diarrhea, neutropenia.
+# We approximate P(ANY severe AE) = 1 - Π(1 - p_i) over those five AEs (independence approximation).
+# Resulting union probabilities:
+#   <50:    0.417
+#   50–65:  0.369
+#   >65:    0.490   (not used unless you add an Age>65 state)
+
+# Map your current Age bins to the paper’s categories:
+#   24–34, 34–44, 44–54  -> <50  (0.417)
+#   54–64                 -> 50–65 (0.369)
+p_adv_map = {
+    "24–34": 0.417,
+    "34–44": 0.417,
+    "44–54": 0.417,
+    "54–64": 0.369,
 }
 
 pot_adv = gum.Potential().add(idg.variable("TreatNow")).add(idg.variable("Age")).add(idg.variable("Adverse"))
 for i_t, tlab in enumerate(["No","Yes"]):
-    for i_a, alab in enumerate(["30–59","60–69","70–79","80+"]):
-        p_adv = 0.0 if tlab=="No" else p_adv_by_age[alab]
-        pot_adv[{"TreatNow":i_t,"Age":i_a,"Adverse":0}] = 1 - p_adv
-        pot_adv[{"TreatNow":i_t,"Age":i_a,"Adverse":1}] = p_adv
-idg.setCPT("Adverse",pot_adv)
+    for i_a, alab in enumerate(["24–34","34–44","44–54","54–64"]):
+        if tlab == "Yes":
+            p_adv = p_adv_map[alab]
+        else:
+            # no treatment -> model severe treatment-related AE as ~0
+            p_adv = 0.0
+        pot_adv[{"TreatNow": i_t, "Age": i_a, "Adverse": 1}] = p_adv
+        pot_adv[{"TreatNow": i_t, "Age": i_a, "Adverse": 0}] = 1.0 - p_adv
+
+#idg.setCPT("Adverse", pot_adv)
+idg.cpt(id_advTreat).fillWith(pot_adv)
+
+ 
+# pot_adv = gum.Potential().add(idg.variable("TreatNow")).add(idg.variable("Age")).add(idg.variable("Adverse"))
+# for i_t, tlab in enumerate(["No","Yes"]):
+#     for i_a, alab in enumerate(["30–59","60–69","70–79","80+"]):
+#         p_adv = 0.0 if tlab=="No" else p_adv_by_age[alab]
+#         pot_adv[{"TreatNow":i_t,"Age":i_a,"Adverse":0}] = 1 - p_adv
+#         pot_adv[{"TreatNow":i_t,"Age":i_a,"Adverse":1}] = p_adv
+# idg.setCPT("Adverse",pot_adv)
+
 
 # -------------------------
 # 8) Utility (same as before)
@@ -287,6 +332,7 @@ ie = gum.ShaferShenoyLIMIDInference(idg)
 for var, val in evs.items():
     ie.addEvidence(var, val)
 ie.makeInference()
+
 
 print("Posterior P(CRC=Yes):", ie.posterior("CRC")[1])
 print("Optimal decision:", ie.optimalDecision("TreatNow"))
