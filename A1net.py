@@ -35,61 +35,62 @@ idg = gum.InfluenceDiagram()
 # Hidden disease
 crc = gum.LabelizedVariable("CRC","Colorectal Cancer",2)
 crc.changeLabel(0,"No"); crc.changeLabel(1,"Yes")
-idg.addChanceNode(crc)
+id_crc = idg.addChanceNode(crc)
 
 # Risk factors
 diab = gum.LabelizedVariable("Diabetes","Diabetes",2)
 diab.changeLabel(0,"No"); diab.changeLabel(1,"Yes")
-idg.addChanceNode(diab)
+id_diabetes = idg.addChanceNode(diab)
 
 pa   = gum.LabelizedVariable("PA","Physical Activity",2)
 pa.changeLabel(0,"Low"); pa.changeLabel(1,"High")
-idg.addChanceNode(pa)
+id_physActivity = idg.addChanceNode(pa)
 
 bmi  = gum.LabelizedVariable("BMI","BMI class",4)
 for i,l in enumerate(["Under","Normal","Over","Obese"]): bmi.changeLabel(i,l)
-idg.addChanceNode(bmi)
+id_bmi = idg.addChanceNode(bmi)
 
 age = gum.LabelizedVariable("Age","Age band",4)
 for i,l in enumerate(["30–59","60–69","70–79","80+"]): age.changeLabel(i,l)
-idg.addChanceNode(age)
+id_age = idg.addChanceNode(age)
 
 htn = gum.LabelizedVariable("Hypertension","Hypertension",2)
 htn.changeLabel(0,"No"); htn.changeLabel(1,"Yes")
-idg.addChanceNode(htn)
+id_hypTension = idg.addChanceNode(htn)
 
 smk = gum.LabelizedVariable("Smoke","Smoking status",3)
 for i,l in enumerate(["Never","Former","Current"]): smk.changeLabel(i,l)
-idg.addChanceNode(smk)
+id_smoking = idg.addChanceNode(smk)
 
 alc = gum.LabelizedVariable("Alcohol","Alcohol intake",2)
 alc.changeLabel(0,"Low"); alc.changeLabel(1,"High")
-idg.addChanceNode(alc)
+id_alcohol = idg.addChanceNode(alc)
 
 # Test Type & Result
 tt = gum.LabelizedVariable("TestType","Test Type",3)
 for i,l in enumerate(["FIT","FOBT","Colonoscopy"]): tt.changeLabel(i,l)
-idg.addChanceNode(tt)
+id_testType = idg.addChanceNode(tt)
 
 test = gum.LabelizedVariable("Test","Diagnostic Test Result",2)
 test.changeLabel(0,"Negative"); test.changeLabel(1,"Positive")
-idg.addChanceNode(test)
+id_testResult = idg.addChanceNode(test)
 
 # Symptoms of crc
 sym_names = ["ChangeBowel","Distress","Pain","WeightLoss","Fatigue","Nausea","Vomiting"]
+sym_ids = ["ChangeBowel": None, "Distress": None, "Pain": None, "Weightloss": None, "Fatigue": None, "Nausea": None, "Vominting": None]
 for s in sym_names:
     v = gum.LabelizedVariable(s,s,2); v.changeLabel(0,"No"); v.changeLabel(1,"Yes")
-    idg.addChanceNode(v)
-
+    sym_ids[s] = idg.addChanceNode(v)
+    
 # Adverse events of treatment
 adv = gum.LabelizedVariable("Adverse","Treatment Adverse Event",2)
 adv.changeLabel(0,"No"); adv.changeLabel(1,"Yes")
-idg.addChanceNode(adv)
+id_advTreat = idg.addChanceNode(adv)
 
 # Decision
 treat = gum.LabelizedVariable("TreatNow","Decision: Initiate Treatment?",2)
 treat.changeLabel(0,"No"); treat.changeLabel(1,"Yes")
-idg.addDecisionNode(treat)
+id_treat = idg.addDecisionNode(treat)
 
 # Utility ?? measured as ? utility = utility of treatment
 U = gum.LabelizedVariable("Utility","Utility",1)
@@ -216,7 +217,7 @@ for combo in product(*[parent_states[p] for p in parents]):
     cpt_crc[{**idx,"CRC":0}] = 1 - p1
     cpt_crc[{**idx,"CRC":1}] = p1
 #idg.setCPT("CRC", cpt_crc)
-idg.cpt(crc).fillWith(cpt_crc)
+idg.cpt(id_crc).fillWith(cpt_crc)
 
 # -------------------------
 # 5) Symptoms CPTs (from your two papers)
@@ -230,7 +231,8 @@ for s in sym_names:
     pot = gum.Potential().add(idg.variable("CRC")).add(idg.variable(s))
     pot[{"CRC":0,s:0}] = 1-q1; pot[{"CRC":0,s:1}] = q1
     pot[{"CRC":1,s:0}] = 1-p1; pot[{"CRC":1,s:1}] = p1
-    idg.setCPT(s,pot)
+    #idg.setCPT(s,pot)
+    idg.cpt(sym_ids[s]).fillWith(pot)
 
 # -------------------------
 # 6) TestType + Test CPTs
@@ -244,7 +246,8 @@ for i_crc, clab in enumerate(["No","Yes"]):
         p_pos = Se if clab=="Yes" else (1 - Sp)
         pot_test[{"CRC":i_crc,"TestType":i_tt,"Test":0}] = 1 - p_pos
         pot_test[{"CRC":i_crc,"TestType":i_tt,"Test":1}] = p_pos
-idg.setCPT("Test",pot_test)
+#idg.setCPT("Test",pot_test)
+idg.cpt(id_testResult).fillWith(pot_test)
 
 # -------------------------
 # 7) Adverse events after treatment (age-stratified, calibrated)
