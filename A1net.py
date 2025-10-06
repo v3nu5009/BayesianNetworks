@@ -1,4 +1,4 @@
-# pip install pyagrum
+
 import pyagrum as gum
 import math
 from itertools import product
@@ -121,20 +121,20 @@ idg.addArc("Test","TreatNow")
 idg.addArc("Age","TreatNow") #age can affect but if we're unable to find sufficient evidence, consult expert ?
 
 idg.addArc("TreatNow","Adverse")
-idg.addArc("Age","Adverse") #should be able to find studies linking FOUND ONE
+idg.addArc("Age","Adverse") 
 
 for p in ["CRC","TreatNow","Adverse","Age"]:
     idg.addArc(p,"Utility")
 
 # -------------------------
-# 3) Root priors (from Corrales + age hybrid)  #  CHECK PAPER TO CONFIRM PRIORS MAYBE THERES SOURCE CODE FOR THE BN
+# 3) Root priors (from Corrales + age hybrid) 
 # -------------------------
 idg.cpt("Diabetes").fillWith([0.9637,0.0363])                 # No, Yes 
 idg.cpt("PA").fillWith([0.4721,0.5279])                       # Low (1), High(2)
 idg.cpt("BMI").fillWith([0.0110,0.4127,0.4067,0.1696])        # Under, Normal, Over, Obese
 
 # Synthetic age prior (Corrales + Hamilton incidence split)
-idg.cpt("Age").fillWith([0.84693, 0.02944, 0.05495, 0.06869]) # 30–59, 60–69, 70–79, 80+  #check ???
+idg.cpt("Age").fillWith([0.84693, 0.02944, 0.05495, 0.06869]) # 30–59, 60–69, 70–79, 80+ 
 
 idg.cpt("Hypertension").fillWith([0.8495,0.1505])             # No, Yes
 idg.cpt("Smoke").fillWith([0.4990,0.3016,0.1994])             # Never, Former, Current
@@ -147,10 +147,10 @@ idg.cpt("TestType").fillWith([1/3,1/3,1/3])                   # FIT, FOBT, Colon
 # 4) CRC | parents via logistic (RR-encoded)
 # -------------------------
 # Diabetes RR ~1.31
-beta_diab = math.log(1.31)                                    #used the midpoint based on the risk prediction model paper???
+beta_diab = math.log(1.31)                                   
 
 # Low PA protective RR ~0.75
-beta_lowPA = math.log(0.75)                                   # risk prediction model paper???
+beta_lowPA = math.log(0.75)                                  
 
 # BMI: per +5 kg/m^2 midpoint (1.165)
 beta_per5 = math.log((1.24+1.09)/2.0)
@@ -237,7 +237,7 @@ for combo in product(*[parent_states[p] for p in parents]):
 idg.cpt(id_crc).fillWith(cpt_crc)
 
 # -------------------------
-# 5) Symptoms CPTs (from the two papers)
+# 5) Symptoms CPTs 
 # -------------------------
 p_sym_crc = {"ChangeBowel":87.6,"Distress":75.8,"Pain":73.9,
              "WeightLoss":62.1,"Fatigue":56.7,"Nausea":33.9,"Vomiting":26.7}
@@ -273,13 +273,12 @@ for i_crc, clab in enumerate(["No","Yes"]): #No = 0 Yes = 1
 idg.cpt(id_testResult).fillWith(pot_test)
 
 # ============================================================
-# 7) Adverse events after treatment  (age-specific, from JAMA NO 2023)
+# 7) Adverse events after treatment 
 # ============================================================
 # Resulting union probabilities:
 #   <50:    0.2503
 #   50–65:  0.1884
 #   >65:    0.2550   
-
 
 # Map to bins (back-of-envelope mix as discussed):
 #  - 30–59: ≈ (2/3)*0.2503 + (1/3)*0.1884 = 0.23
@@ -315,11 +314,6 @@ idg.cpt(id_advTreat).fillWith(pot_adv)
 # -------------------------
 
 id_utility = idg.idFromName("Utility")
-
-# Add arcs from the variables that influence utility
-for p in ["CRC", "TreatNow", "Adverse", "Age"]:
-    if not idg.existsArc(p, "Utility"):
-        idg.addArc(p, "Utility")
 
 # Define the age actegory and base scores
 ages = ["30–59", "60–69", "70–79", "80+"]
@@ -373,7 +367,6 @@ for i_crc, crc_lab in enumerate(["No", "Yes"]):
 idg.utility(id_utility).fillWith(uPot)
 
 
-
 # -------------------------
 # 9) Example inference
 # -------------------------
@@ -383,8 +376,7 @@ for var, val in evs.items():
     ie.addEvidence(var, val)
 ie.makeInference()
 
-
 print("Posterior P(CRC=Yes):", ie.posterior("CRC")[1])
 print("Optimal decision:", ie.optimalDecision("TreatNow"))
-#print("EU(Treat=Yes), EU(Treat=No):", ie.decisionFunction("TreatNow").toarray())
+
 
