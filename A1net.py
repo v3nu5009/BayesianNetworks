@@ -1,5 +1,5 @@
-
 import pyagrum as gum
+#import pyagrum.lib.notebook as gnb
 import math
 from itertools import product
 
@@ -61,7 +61,7 @@ for i,l in enumerate(["Under","Normal","Over","Obese"]): bmi.changeLabel(i,l)
 id_bmi = idg.addChanceNode(bmi)
 
 age = gum.LabelizedVariable("Age","Age band",4)
-for i,l in enumerate(["30–59","60–69","70–79","80+"]): age.changeLabel(i,l)
+for i,l in enumerate(["30-59","60-69","70-79","80+"]): age.changeLabel(i,l)
 id_age = idg.addChanceNode(age)
 
 htn = gum.LabelizedVariable("Hypertension","Hypertension",2)
@@ -134,7 +134,7 @@ idg.cpt("PA").fillWith([0.4721,0.5279])                       # Low (1), High(2)
 idg.cpt("BMI").fillWith([0.0110,0.4127,0.4067,0.1696])        # Under, Normal, Over, Obese
 
 # Synthetic age prior (Corrales + Hamilton incidence split)
-idg.cpt("Age").fillWith([0.84693, 0.02944, 0.05495, 0.06869]) # 30–59, 60–69, 70–79, 80+ 
+idg.cpt("Age").fillWith([0.84693, 0.02944, 0.05495, 0.06869]) # 30-59, 60-69, 70-79, 80+ 
 
 idg.cpt("Hypertension").fillWith([0.8495,0.1505])             # No, Yes
 idg.cpt("Smoke").fillWith([0.4990,0.3016,0.1994])             # Never, Former, Current
@@ -156,8 +156,8 @@ beta_lowPA = math.log(0.75)
 beta_per5 = math.log((1.24+1.09)/2.0)
 bmi_steps = {"Under":-1, "Normal":0, "Over":1, "Obese":2}     
 
-# Age: RRs vs 30–59 from Hamilton (male+female combined incidences)
-age_RR = {"30–59":1.00, "60–69":6.5217, "70–79":12.1739, "80+":15.2174}
+# Age: RRs vs 30-59 from Hamilton (male+female combined incidences)
+age_RR = {"30-59":1.00, "60-69":6.5217, "70-79":12.1739, "80+":15.2174}
 # logit(p) = B0 + Beta_age x age_x ...
 age_x  = {k: math.log(v) for k,v in age_RR.items()} #loops over each key value pair in the dictionary above and computes the natural logarithm of the RR and stores it in a new dictionary with the sam ekey as above
 beta_age = 1.0
@@ -178,8 +178,8 @@ parents_marginals = {
     "Diabetes":[(0,0.9637),(1,0.0363)],
     "PA":[(1,0.4721),(0,0.5279)],  # x=1 if Low
     "BMI":[(bmi_steps["Under"],0.0110),(0,0.4127),(1,0.4067),(2,0.1696)],
-    "Age":[(age_x["30–59"],0.84693),(age_x["60–69"],0.02944),
-           (age_x["70–79"],0.05495),(age_x["80+"],0.06869)],
+    "Age":[(age_x["30-59"],0.84693),(age_x["60-69"],0.02944),
+           (age_x["70-79"],0.05495),(age_x["80+"],0.06869)],
     "Hypertension":[(0,0.8495),(1,0.1505)],
     "Smoke":[(smoke_x["Never"],0.4990),(smoke_x["Former"],0.3016),(smoke_x["Current"],0.1994)],
     "Alcohol":[(0,0.9505),(1,0.0495)],
@@ -200,7 +200,7 @@ parent_states = {
     "Diabetes":["No","Yes"],
     "PA":["Low","High"],
     "BMI":["Under","Normal","Over","Obese"],
-    "Age":["30–59","60–69","70–79","80+"],
+    "Age":["30-59","60-69","70-79","80+"],
     "Hypertension":["No","Yes"],
     "Smoke":["Never","Former","Current"],
     "Alcohol":["Low","High"]
@@ -215,7 +215,7 @@ def x_value(name, label):
     if name=="Alcohol":       return 1 if label=="High" else 0
     return 0
 
-cpt_crc = gum.Potential() #create the empty table
+cpt_crc = gum.Tensor() #create the empty table
 for p in parents: cpt_crc.add(idg.variable(p)) #add all the parent variables as dimensions
 cpt_crc.add(idg.variable("CRC")) #add CRC as the child
 
@@ -247,7 +247,7 @@ p_sym_not = {"ChangeBowel":8.6,"Distress":12.1,"Pain":14.0,
 for s in sym_names:
     p1 = p_sym_crc[s]/100.0 #percentage of people with CRC who have this symptoms
     q1 = p_sym_not[s]/100.0 #percentage of people without CRC who have this symptom
-    pot = gum.Potential().add(idg.variable("CRC")).add(idg.variable(s)) # P(Sym,CRC)
+    pot = gum.Tensor().add(idg.variable("CRC")).add(idg.variable(s)) # P(Sym,CRC)
     pot[{"CRC":0,s:0}] = 1-q1; pot[{"CRC":0,s:1}] = q1
     pot[{"CRC":1,s:0}] = 1-p1; pot[{"CRC":1,s:1}] = p1
     #Assign the table to the model
@@ -282,39 +282,26 @@ idg.cpt(id_testResult).fillWith(pot_test)
 # ============================================================
 # Resulting union probabilities:
 #   <50:    0.2503
-#   50–65:  0.1884
+#   50-65:  0.1884
 #   >65:    0.2550   
 
 # Map to bins (back-of-envelope mix as discussed):
-#  - 30–59: ≈ (2/3)*0.2503 + (1/3)*0.1884 = 0.23
-#  - 60–69: ≈ 0.5*(0.1884 + 0.2550)       = 0.2217
-#  - 70–79: 0.2550
+#  - 30-59: ≈ (2/3)*0.2503 + (1/3)*0.1884 = 0.23
+#  - 60-69: ≈ 0.5*(0.1884 + 0.2550)       = 0.2217
+#  - 70-79: 0.2550
 #  - 80+:   0.2550
 
 p_adv_map = {
-    "30–59": 0.23,
-    "60–69": 0.2217,
-    "70–79": 0.2550,
+    "30-59": 0.23,
+    "60-69": 0.2217,
+    "70-79": 0.2550,
     "80+": 0.2550,
 }
 # P(Adverse|TreatNow,Age)
-pot_adv = gum.Potential().add(idg.variable("TreatNow")).add(idg.variable("Age")).add(idg.variable("Adverse"))
+
+pot_adv = gum.Tensor().add(idg.variable("TreatNow")).add(idg.variable("Age")).add(idg.variable("Adverse"))
 for i_t, tlab in enumerate(["No","Yes"]):
-    for i_a, alab in enumerate(["24–34","34–44","44–54","54–64"]):
-        if tlab == "Yes":
-            p_adv = p_adv_map[alab]
-        else:
-            # no treatment -> model severe treatment-related AE as ~0
-            p_adv = 0.0
-        pot_adv[{"TreatNow": i_t, "Age": i_a, "Adverse": 1}] = p_adv
-        pot_adv[{"TreatNow": i_t, "Age": i_a, "Adverse": 0}] = 1.0 - p_adv
-
-idg.setCPT("Adverse", pot_adv)
-
-
-pot_adv = gum.Potential().add(idg.variable("TreatNow")).add(idg.variable("Age")).add(idg.variable("Adverse"))
-for i_t, tlab in enumerate(["No","Yes"]):
-    for i_a, alab in enumerate(["30–59","60–69","70–79","80+"]):
+    for i_a, alab in enumerate(["30-59","60-69","70-79","80+"]):
         #set probability of adverse event based on treatment and age
         if tlab == "Yes":
             p_adv = p_adv_map[alab]
@@ -335,8 +322,8 @@ idg.cpt(id_advTreat).fillWith(pot_adv)
 id_utility = idg.idFromName("Utility")
 
 # Define the age actegory and base scores
-ages = ["30–59", "60–69", "70–79", "80+"]
-age_base = {"30–59": 100, "60–69": 95, "70–79": 90, "80+": 85}
+ages = ["30-59", "60-69", "70-79", "80+"]
+age_base = {"30-59": 100, "60-69": 95, "70-79": 90, "80+": 85}
 
 pen_crc_untreated = -60   # penalty if CRC present & not treated
 treat_gain_on_crc = +40   # benefit recovered when treating CRC
@@ -384,6 +371,7 @@ for i_crc, crc_lab in enumerate(["No", "Yes"]):
 
 # Assign the utility table to the model
 idg.utility(id_utility).fillWith(uPot)
+#gnb.showInfluenceDiagram(idg)
 
 
 # -------------------------
