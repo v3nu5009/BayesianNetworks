@@ -9,21 +9,31 @@ from itertools import product
 def logit(p): return math.log(p/(1-p))
 def inv_logit(x): return 1/(1+math.exp(-x))
 
+#its adjusting beta0 so that the models overall average predicted  probability matches the target prevelance (0.07).
+# we know the RR for the risk factors, e.g. B1X1; B2X2 ... (but we dont know how common CRC is in the general population)
 def calibrate_intercept(beta_base, parents_marginals, rr_params,
                         target_prev=0.0007, max_iter=200, tol=1e-10):
     beta0 = logit(target_prev) + beta_base
     for _ in range(max_iter):
-        combos = [(0.0, 1.0)]
+        combos = [(0.0, 1.0)] # linear sum = 0 and probability = 1
+        # go risk by risk and get log risk effect (B), vals is the list of (x_values and probabilities)
         for name, vals in parents_marginals.items():
             beta = rr_params.get(name, 0.0)
-            new = []
+            new = [] #hold the expanded co,binations after including this variable
+            
+            #lin = current predictor (sum of BxXx's so far) and pr = (combined probability of that combo so far)
+            
+            #for each combo so far we add the variables contribution to the linear predictor and multiply the probabilities
             for (lin, pr) in combos:
                 for (xv, pv) in vals:
                     new.append((lin + beta*xv, pr*pv))
             combos = new
-        p_hat = sum(pr * inv_logit(beta0 + lin) for (lin, pr) in combos)
+            # compute the predicted overall prevalence under the curren B0
+        p_hat = sum(p r * inv_logit(beta0 + lin) for (lin, pr) in combos)
+        #Check difference from the target
         diff = target_prev - p_hat
         if abs(diff) < tol: break
+        #Adjust B0
         beta0 += diff / (p_hat*(1-p_hat) + 1e-12)
     return beta0
 
@@ -119,36 +129,37 @@ for p in ["CRC","TreatNow","Adverse","Age"]:
 # -------------------------
 # 3) Root priors (from Corrales + age hybrid)  #  CHECK PAPER TO CONFIRM PRIORS MAYBE THERES SOURCE CODE FOR THE BN
 # -------------------------
-idg.cpt("Diabetes").fillWith([0.9637,0.0363])                 # No, Yes
-idg.cpt("PA").fillWith([0.4721,0.5279])                       # Low, High
+idg.cpt("Diabetes").fillWith([0.9637,0.0363])                 # No, Yes 
+idg.cpt("PA").fillWith([0.4721,0.5279])                       # Low (1), High(2)
 idg.cpt("BMI").fillWith([0.0110,0.4127,0.4067,0.1696])        # Under, Normal, Over, Obese
 
 # Synthetic age prior (Corrales + Hamilton incidence split)
-idg.cpt("Age").fillWith([0.84693, 0.02944, 0.05495, 0.06869]) # 30–59, 60–69, 70–79, 80+
+idg.cpt("Age").fillWith([0.84693, 0.02944, 0.05495, 0.06869]) # 30–59, 60–69, 70–79, 80+  #check ???
 
 idg.cpt("Hypertension").fillWith([0.8495,0.1505])             # No, Yes
 idg.cpt("Smoke").fillWith([0.4990,0.3016,0.1994])             # Never, Former, Current
 idg.cpt("Alcohol").fillWith([0.9505,0.0495])                  # Low, High
 
-# TestType prior
-idg.cpt("TestType").fillWith([1/3,1/3,1/3])
+# TestType prior 
+idg.cpt("TestType").fillWith([1/3,1/3,1/3])                   # FIT, FOBT, Colonoscopy
 
 # -------------------------
 # 4) CRC | parents via logistic (RR-encoded)
 # -------------------------
 # Diabetes RR ~1.31
-beta_diab = math.log(1.31)
+beta_diab = math.log(1.31)                                    #used the midpoint based on the risk prediction model paper???
 
 # Low PA protective RR ~0.75
-beta_lowPA = math.log(0.75)
+beta_lowPA = math.log(0.75)                                   # risk prediction model paper???
 
 # BMI: per +5 kg/m^2 midpoint (1.165)
 beta_per5 = math.log((1.24+1.09)/2.0)
-bmi_steps = {"Under":-1, "Normal":0, "Over":1, "Obese":2}
+bmi_steps = {"Under":-1, "Normal":0, "Over":1, "Obese":2}     
 
 # Age: RRs vs 30–59 from Hamilton (male+female combined incidences)
 age_RR = {"30–59":1.00, "60–69":6.5217, "70–79":12.1739, "80+":15.2174}
-age_x  = {k: math.log(v) for k,v in age_RR.items()}
+# logit(p) = B0 + Beta_age x age_x ...
+age_x  = {k: math.log(v) for k,v in age_RR.items()} #loops over each key value pair in the dictionary above and computes the natural logarithm of the RR and stores it in a new dictionary with the sam ekey as above
 beta_age = 1.0
 
 # Hypertension RR ~1.15 (meta-analysis)
@@ -204,17 +215,23 @@ def x_value(name, label):
     if name=="Alcohol":       return 1 if label=="High" else 0
     return 0
 
-cpt_crc = gum.Potential()
-for p in parents: cpt_crc.add(idg.variable(p))
-cpt_crc.add(idg.variable("CRC"))
+cpt_crc = gum.Potential() #create the empty table
+for p in parents: cpt_crc.add(idg.variable(p)) #add all the parent variables as dimensions
+cpt_crc.add(idg.variable("CRC")) #add CRC as the child
 
 from itertools import product
+#combo is one combination of parent states 
 for combo in product(*[parent_states[p] for p in parents]):
+    # labels are dictionary combos of parent and states e.g. ["Diabetes", "yes"]
     labels = dict(zip(parents, combo))
+    #compute linear predictor: lin = B0 + sum (B1X1 + ...)
     lin = beta0 + sum(rr_params[p]*x_value(p, labels[p]) for p in parents)
+    #compute the probability using the helper function
     p1 = inv_logit(lin)
+    # converts each label to its index in parent_states
     idx = {p: parent_states[p].index(labels[p]) for p in parents}
-    cpt_crc[{**idx,"CRC":0}] = 1 - p1
+ 
+    cpt_crc[{**idx,"CRC":0}] = 1 - p1    #sets probability CRC = No
     cpt_crc[{**idx,"CRC":1}] = p1
 #idg.setCPT("CRC", cpt_crc)
 idg.cpt(id_crc).fillWith(cpt_crc)
