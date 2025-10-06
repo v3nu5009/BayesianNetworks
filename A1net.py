@@ -1,4 +1,4 @@
-# pip install pyagrum
+
 import pyagrum as gum
 import math
 from itertools import product
@@ -29,7 +29,7 @@ def calibrate_intercept(beta_base, parents_marginals, rr_params,
                     new.append((lin + beta*xv, pr*pv))
             combos = new
             # compute the predicted overall prevalence under the curren B0
-        p_hat = sum(p r * inv_logit(beta0 + lin) for (lin, pr) in combos)
+        p_hat = sum(pr * inv_logit(beta0 + lin) for (lin, pr) in combos)
         #Check difference from the target
         diff = target_prev - p_hat
         if abs(diff) < tol: break
@@ -121,7 +121,7 @@ idg.addArc("Test","TreatNow")
 idg.addArc("Age","TreatNow") #age can affect but if we're unable to find sufficient evidence, consult expert ?
 
 idg.addArc("TreatNow","Adverse")
-idg.addArc("Age","Adverse") #should be able to find studies linking FOUND ONE
+idg.addArc("Age","Adverse")
 
 for p in ["CRC","TreatNow","Adverse","Age"]:
     idg.addArc(p,"Utility")
@@ -254,9 +254,14 @@ for s in sym_names:
 # -------------------------
 # 6) TestType + Test CPTs
 # -------------------------
-sens = {"FIT":0.925,"FOBT":0.50,"Colonoscopy":0.99}
-spec = {"FIT":0.93, "FOBT":0.86,"Colonoscopy":0.99}
-pot_test = gum.Potential().add(idg.variable("CRC")).add(idg.variable("TestType")).add(idg.variable("Test"))
+
+#sensitivity and specificity for:
+# - FIT --> "Optimal Strategies for Colorectal Cancer Screening-Shailavi Jain"
+# - FOB --> "Optimal Strategies for Colorectal Cancer Screening-Shailavi Jain" (range given, median used)
+# - Colonoscopy --> ""Optimal Strategies for Colorectal Cancer Screening-Shailavi Jain" (range given, median used)"
+sens = {"FIT":0.74,"FOBT":0.50,"Colonoscopy":0.92}
+spec = {"FIT":0.94, "FOBT":0.625,"Colonoscopy":0.89}
+pot_test = gum.Tensor().add(idg.variable("CRC")).add(idg.variable("TestType")).add(idg.variable("Test"))
 for i_crc, clab in enumerate(["No","Yes"]):
     for i_tt, ttype in enumerate(["FIT","FOBT","Colonoscopy"]):
         Se = sens[ttype]; Sp = spec[ttype]
@@ -267,38 +272,9 @@ for i_crc, clab in enumerate(["No","Yes"]):
 idg.cpt(id_testResult).fillWith(pot_test)
 
 # -------------------------
-# 7) Adverse events after treatment (age-stratified, calibrated)
+# 7) Adverse events after treatment
 # -------------------------
-# Overall moderate-to-severe toxicity ≈45.7% (CJ Han 2024). Age≥70 has OR≈2.15 for grade ≥3 AEs (McCleary 2022).
-# p_adv_by_age = {
-#     "30–59": 0.4337,
-#     "60–69": 0.4337,
-#     "70–79": 0.6222,
-#     "80+":   0.6222,
-# }
 
-# pot_adv = gum.Potential().add(idg.variable("TreatNow")).add(idg.variable("Age")).add(idg.variable("Adverse"))
-# for i_t, tlab in enumerate(["No","Yes"]):
-#     for i_a, alab in enumerate(["30–59","60–69","70–79","80+"]):
-#         p_adv = 0.0 if tlab=="No" else p_adv_by_age[alab]
-#         pot_adv[{"TreatNow":i_t,"Age":i_a,"Adverse":0}] = 1 - p_adv
-#         pot_adv[{"TreatNow":i_t,"Age":i_a,"Adverse":1}] = p_adv
-# idg.setCPT("Adverse",pot_adv)
-
-# ============================================================
-# 7) Adverse events after treatment  (age-specific, from JAMA NO 2023)
-# ============================================================
-# Source: Meng et al., JAMA Network Open 2023: age-stratified grade 3–5 rates for
-# severe abdominal pain, anemia, rash, diarrhea, neutropenia.
-# We approximate P(ANY severe AE) = 1 - Π(1 - p_i) over those five AEs (independence approximation).
-# Resulting union probabilities:
-#   <50:    0.417
-#   50–65:  0.369
-#   >65:    0.490   (not used unless you add an Age>65 state)
-
-# Map your current Age bins to the paper’s categories:
-#   24–34, 34–44, 44–54  -> <50  (0.417)
-#   54–64                 -> 50–65 (0.369)
 p_adv_map = {
     "24–34": 0.417,
     "34–44": 0.417,
@@ -320,38 +296,21 @@ for i_t, tlab in enumerate(["No","Yes"]):
 #idg.setCPT("Adverse", pot_adv)
 idg.cpt(id_advTreat).fillWith(pot_adv)
 
- 
-# pot_adv = gum.Potential().add(idg.variable("TreatNow")).add(idg.variable("Age")).add(idg.variable("Adverse"))
-# for i_t, tlab in enumerate(["No","Yes"]):
-#     for i_a, alab in enumerate(["30–59","60–69","70–79","80+"]):
-#         p_adv = 0.0 if tlab=="No" else p_adv_by_age[alab]
-#         pot_adv[{"TreatNow":i_t,"Age":i_a,"Adverse":0}] = 1 - p_adv
-#         pot_adv[{"TreatNow":i_t,"Age":i_a,"Adverse":1}] = p_adv
-# idg.setCPT("Adverse",pot_adv)
-
-
 # -------------------------
-# 8) Utility (same as before)
+# 8) Utility
 # -------------------------
-Uvals = [
-    0.95,0.93,0.90,0.88,  0.95,0.93,0.90,0.88,
-    0.75,0.73,0.70,0.68,  0.45,0.43,0.40,0.38,
-    0.15,0.12,0.10,0.08,  0.15,0.12,0.10,0.08,
-    0.85,0.80,0.75,0.70,  0.65,0.60,0.55,0.50,
-]
-idg.utility(idg.idFromName("Utility")).fillWith(Uvals)
 
 # -------------------------
 # 9) Example inference
 # -------------------------
-evs = {"TestType":"FIT","Test":"Positive","ChangeBowel":"Yes"}
+evs = {'TestType':"FIT", 'Test':"Positive", 'ChangeBowel':"Yes"}
 ie = gum.ShaferShenoyLIMIDInference(idg)
-for var, val in evs.items():
-    ie.addEvidence(var, val)
+ie.setEvidence(evs)
 ie.makeInference()
 
-
-print("Posterior P(CRC=Yes):", ie.posterior("CRC")[1])
+ 
+print("Posterior P(CRC=Yes):", ie.posterior("CRC"))
 print("Optimal decision:", ie.optimalDecision("TreatNow"))
-print("EU(Treat=Yes), EU(Treat=No):", ie.decisionFunction("TreatNow").toarray())
+print("Posterior Utility:", ie.posteriorUtility("TreatNow"))
 
+  
