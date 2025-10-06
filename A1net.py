@@ -29,7 +29,7 @@ def calibrate_intercept(beta_base, parents_marginals, rr_params,
                     new.append((lin + beta*xv, pr*pv))
             combos = new
             # compute the predicted overall prevalence under the curren B0
-        p_hat = sum(p r * inv_logit(beta0 + lin) for (lin, pr) in combos)
+        p_hat = sum(pr * inv_logit(beta0 + lin) for (lin, pr) in combos)
         #Check difference from the target
         diff = target_prev - p_hat
         if abs(diff) < tol: break
@@ -165,7 +165,7 @@ beta_age = 1.0
 # Hypertension RR ~1.15 (meta-analysis)
 beta_htn = math.log(1.15)
 
-# Smoking RRs vs Never (Botteri 2020 paragraph you provided)
+# Smoking RRs vs Never (Botteri 2020 paragraph on smoking and CRC)
 smoke_RR = {"Never":1.00, "Former":1.17, "Current":1.14}
 smoke_x  = {k: math.log(v) for k,v in smoke_RR.items()}
 beta_smoke = 1.0
@@ -237,33 +237,39 @@ for combo in product(*[parent_states[p] for p in parents]):
 idg.cpt(id_crc).fillWith(cpt_crc)
 
 # -------------------------
-# 5) Symptoms CPTs (from your two papers)
+# 5) Symptoms CPTs (from the two papers)
 # -------------------------
 p_sym_crc = {"ChangeBowel":87.6,"Distress":75.8,"Pain":73.9,
              "WeightLoss":62.1,"Fatigue":56.7,"Nausea":33.9,"Vomiting":26.7}
 p_sym_not = {"ChangeBowel":8.6,"Distress":12.1,"Pain":14.0,
              "WeightLoss":7.3,"Fatigue":18.5,"Nausea":5.2,"Vomiting":3.1}
+#build the probability tables for each symptom given CRC (Given whether a person has CRC, what's the probability they will show this symptom)
 for s in sym_names:
-    p1 = p_sym_crc[s]/100.0; q1 = p_sym_not[s]/100.0
-    pot = gum.Potential().add(idg.variable("CRC")).add(idg.variable(s))
+    p1 = p_sym_crc[s]/100.0 #percentage of people with CRC who have this symptoms
+    q1 = p_sym_not[s]/100.0 #percentage of people without CRC who have this symptom
+    pot = gum.Potential().add(idg.variable("CRC")).add(idg.variable(s)) # P(Sym,CRC)
     pot[{"CRC":0,s:0}] = 1-q1; pot[{"CRC":0,s:1}] = q1
     pot[{"CRC":1,s:0}] = 1-p1; pot[{"CRC":1,s:1}] = p1
-    #idg.setCPT(s,pot)
+    #Assign the table to the model
     idg.cpt(sym_ids[s]).fillWith(pot)
 
 # -------------------------
 # 6) TestType + Test CPTs
 # -------------------------
-sens = {"FIT":0.925,"FOBT":0.50,"Colonoscopy":0.99}
-spec = {"FIT":0.93, "FOBT":0.86,"Colonoscopy":0.99}
-pot_test = gum.Potential().add(idg.variable("CRC")).add(idg.variable("TestType")).add(idg.variable("Test"))
-for i_crc, clab in enumerate(["No","Yes"]):
+sens = {"FIT":0.74,"FOBT":0.50,"Colonoscopy":0.92}
+spec = {"FIT":0.94, "FOBT":0.625,"Colonoscopy":0.89}
+
+####       P(Test/CRC,TestType)  -> how likely is it that the test result will be positive or negative
+pot_test = gum.Potential().add(idg.variable("CRC")).add(idg.variable("TestType")).add(idg.variable("Test")) #Empty CPT container
+for i_crc, clab in enumerate(["No","Yes"]): #No = 0 Yes = 1
     for i_tt, ttype in enumerate(["FIT","FOBT","Colonoscopy"]):
         Se = sens[ttype]; Sp = spec[ttype]
-        p_pos = Se if clab=="Yes" else (1 - Sp)
+        #compute the probability of a positive test
+        p_pos = Se if clab=="Yes" else (1 - Sp) # use sensitivity if true positive else use 1-specificity if false positive
+        #fill the CPT values for test outcomes
         pot_test[{"CRC":i_crc,"TestType":i_tt,"Test":0}] = 1 - p_pos
         pot_test[{"CRC":i_crc,"TestType":i_tt,"Test":1}] = p_pos
-#idg.setCPT("Test",pot_test)
+#Assign the table to the model
 idg.cpt(id_testResult).fillWith(pot_test)
 
 # -------------------------
@@ -294,9 +300,9 @@ idg.cpt(id_testResult).fillWith(pot_test)
 # Resulting union probabilities:
 #   <50:    0.417
 #   50–65:  0.369
-#   >65:    0.490   (not used unless you add an Age>65 state)
+#   >65:    0.490   (not used unless add an Age>65 state)
 
-# Map your current Age bins to the paper’s categories:
+# Map the current Age bins to the paper’s categories:
 #   24–34, 34–44, 44–54  -> <50  (0.417)
 #   54–64                 -> 50–65 (0.369)
 p_adv_map = {
@@ -305,19 +311,21 @@ p_adv_map = {
     "44–54": 0.417,
     "54–64": 0.369,
 }
-
+# P(Advers|TreatNow,Age)
 pot_adv = gum.Potential().add(idg.variable("TreatNow")).add(idg.variable("Age")).add(idg.variable("Adverse"))
 for i_t, tlab in enumerate(["No","Yes"]):
     for i_a, alab in enumerate(["24–34","34–44","44–54","54–64"]):
+        #set probability of adverse event based on treatment and age
         if tlab == "Yes":
             p_adv = p_adv_map[alab]
         else:
-            # no treatment -> model severe treatment-related AE as ~0
+            # If treatement not given, no adverse events
             p_adv = 0.0
+        #fill the CPT values for adverse event outcomes
         pot_adv[{"TreatNow": i_t, "Age": i_a, "Adverse": 1}] = p_adv
-        pot_adv[{"TreatNow": i_t, "Age": i_a, "Adverse": 0}] = 1.0 - p_adv
+        pot_adv[{"TreatNow": i_t, "Age": i_a, "Adverse": 0}] = 1.0 - p_adv #probability of no adverse event
 
-#idg.setCPT("Adverse", pot_adv)
+#Assign the table to the model
 idg.cpt(id_advTreat).fillWith(pot_adv)
 
  
@@ -331,15 +339,68 @@ idg.cpt(id_advTreat).fillWith(pot_adv)
 
 
 # -------------------------
-# 8) Utility (same as before)
+# 8) Utility (Based on scaled clinical score model)
 # -------------------------
-Uvals = [
-    0.95,0.93,0.90,0.88,  0.95,0.93,0.90,0.88,
-    0.75,0.73,0.70,0.68,  0.45,0.43,0.40,0.38,
-    0.15,0.12,0.10,0.08,  0.15,0.12,0.10,0.08,
-    0.85,0.80,0.75,0.70,  0.65,0.60,0.55,0.50,
-]
-idg.utility(idg.idFromName("Utility")).fillWith(Uvals)
+
+id_utility = idg.idFromName("Utility")
+
+# Add arcs from the variables that influence utility
+for p in ["CRC", "TreatNow", "Adverse", "Age"]:
+    if not idg.existsArc(p, "Utility"):
+        idg.addArc(p, "Utility")
+
+# Define the age actegory and base scores
+ages = ["30–59", "60–69", "70–79", "80+"]
+age_base = {"30–59": 100, "60–69": 95, "70–79": 90, "80+": 85}
+
+pen_crc_untreated = -60   # penalty if CRC present & not treated
+treat_gain_on_crc = +40   # benefit recovered when treating CRC
+pen_ae_if_treated = -20   # penalty for major AE (only if treated)
+pen_overtreat = -10       # penalty for treating when CRC is absent
+
+# Function to compute scaled score
+def scaled_score(age, crc, treat, ae):
+    score = age_base[age]
+    if crc == "Yes":
+        score += pen_crc_untreated
+        if treat == "Yes":
+            score += treat_gain_on_crc
+    else:
+        if treat == "Yes":
+            score += pen_overtreat
+    if treat == "Yes" and ae == "Yes":
+        score += pen_ae_if_treated
+    score = max(0, min(100, score))
+    return score / 100.0
+
+# Create the utility potential table
+uPot = (
+    gum.Tensor() 
+    .add(idg.variable("CRC"))
+    .add(idg.variable("TreatNow"))
+    .add(idg.variable("Adverse"))
+    .add(idg.variable("Age"))
+    .add(idg.variable("Utility")) 
+)
+
+# Add the utility values (scaled scores)
+for i_crc, crc_lab in enumerate(["No", "Yes"]):
+    for i_tr, tr_lab in enumerate(["No", "Yes"]):
+        for i_ae, ae_lab in enumerate(["No", "Yes"]):
+            for i_age, age_lab in enumerate(ages):
+                u = scaled_score(age_lab, crc_lab, tr_lab, ae_lab)
+                uPot[{
+                    "CRC": i_crc,
+                    "TreatNow": i_tr,
+                    "Adverse": i_ae,
+                    "Age": i_age,
+                    "Utility": 0
+                }] = u
+
+# Assign the utility table to the model
+idg.utility(id_utility).fillWith(uPot)
+
+
 
 # -------------------------
 # 9) Example inference
@@ -353,5 +414,5 @@ ie.makeInference()
 
 print("Posterior P(CRC=Yes):", ie.posterior("CRC")[1])
 print("Optimal decision:", ie.optimalDecision("TreatNow"))
-print("EU(Treat=Yes), EU(Treat=No):", ie.decisionFunction("TreatNow").toarray())
+#print("EU(Treat=Yes), EU(Treat=No):", ie.decisionFunction("TreatNow").toarray())
 
