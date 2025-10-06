@@ -43,7 +43,7 @@ def calibrate_intercept(beta_base, parents_marginals, rr_params,
 idg = gum.InfluenceDiagram()
 
 # Hidden disease
-crc = gum.LabelizedVariable("CRC","Colorectal Cancer",2)
+crc = gum.LabelizedVariable("CRC","Colorectal Cancer",2) 
 crc.changeLabel(0,"No"); crc.changeLabel(1,"Yes")
 id_crc = idg.addChanceNode(crc)
 
@@ -107,14 +107,14 @@ U = gum.LabelizedVariable("Utility","Utility",1)
 idg.addUtilityNode(U)
 
 # -------------------------
-# 2) Arcs
+# 2) Arcs - CPT for CRC given parent risk factors
 # -------------------------
-for p in ["Diabetes","PA","BMI","Age","Hypertension","Smoke","Alcohol"]:
+for p in ["Diabetes","PA","BMI","Age","Hypertension","Smoke","Alcohol"]: #parent variables of CRC
     idg.addArc(p,"CRC")
 
-for s in sym_names: idg.addArc("CRC",s)
-idg.addArc("CRC","Test")
-idg.addArc("TestType","Test")
+for s in sym_names: idg.addArc("CRC",s) #arc from CRC to each symptom
+idg.addArc("CRC","Test") 
+idg.addArc("TestType","Test") 
 
 for s in sym_names: idg.addArc(s,"TreatNow") #symptoms affect decision to treat now *nod*
 idg.addArc("Test","TreatNow")
@@ -167,8 +167,8 @@ beta_htn = math.log(1.15)
 
 # Smoking RRs vs Never (Botteri 2020 paragraph on smoking and CRC)
 smoke_RR = {"Never":1.00, "Former":1.17, "Current":1.14}
-smoke_x  = {k: math.log(v) for k,v in smoke_RR.items()}
-beta_smoke = 1.0
+smoke_x  = {k: math.log(v) for k,v in smoke_RR.items()} 
+beta_smoke = 1.0 # WHY IS THIS VALUE 1?
 
 # Alcohol High vs Low RR ~1.50 (meta-analysis)
 beta_alc = math.log(1.50)
@@ -293,6 +293,20 @@ p_adv_map = {
     "80+": 0.2550,
 }
 # P(Advers|TreatNow,Age)
+pot_adv = gum.Potential().add(idg.variable("TreatNow")).add(idg.variable("Age")).add(idg.variable("Adverse"))
+for i_t, tlab in enumerate(["No","Yes"]):
+    for i_a, alab in enumerate(["24–34","34–44","44–54","54–64"]):
+        if tlab == "Yes":
+            p_adv = p_adv_map[alab]
+        else:
+            # no treatment -> model severe treatment-related AE as ~0
+            p_adv = 0.0
+        pot_adv[{"TreatNow": i_t, "Age": i_a, "Adverse": 1}] = p_adv
+        pot_adv[{"TreatNow": i_t, "Age": i_a, "Adverse": 0}] = 1.0 - p_adv
+
+idg.setCPT("Adverse", pot_adv)
+
+
 pot_adv = gum.Potential().add(idg.variable("TreatNow")).add(idg.variable("Age")).add(idg.variable("Adverse"))
 for i_t, tlab in enumerate(["No","Yes"]):
     for i_a, alab in enumerate(["30–59","60–69","70–79","80+"]):
