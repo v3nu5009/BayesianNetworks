@@ -33,7 +33,7 @@ def calibrate_intercept(beta_base, parents_marginals, rr_params,
 idg = gum.InfluenceDiagram()
 
 # Hidden disease
-crc = gum.LabelizedVariable("CRC","Colorectal Cancer",2)
+crc = gum.LabelizedVariable("CRC","Colorectal Cancer",2) 
 crc.changeLabel(0,"No"); crc.changeLabel(1,"Yes")
 idg.addChanceNode(crc)
 
@@ -96,14 +96,14 @@ U = gum.LabelizedVariable("Utility","Utility",1)
 idg.addUtilityNode(U)
 
 # -------------------------
-# 2) Arcs
+# 2) Arcs - CPT for CRC given parent risk factors
 # -------------------------
-for p in ["Diabetes","PA","BMI","Age","Hypertension","Smoke","Alcohol"]:
+for p in ["Diabetes","PA","BMI","Age","Hypertension","Smoke","Alcohol"]: #parent variables of CRC
     idg.addArc(p,"CRC")
 
-for s in sym_names: idg.addArc("CRC",s)
-idg.addArc("CRC","Test")
-idg.addArc("TestType","Test")
+for s in sym_names: idg.addArc("CRC",s) #arc from CRC to each symptom
+idg.addArc("CRC","Test") 
+idg.addArc("TestType","Test") 
 
 for s in sym_names: idg.addArc(s,"TreatNow") #symptoms affect decision to treat now *nod*
 idg.addArc("Test","TreatNow")
@@ -146,17 +146,17 @@ beta_per5 = math.log((1.24+1.09)/2.0)
 bmi_steps = {"Under":-1, "Normal":0, "Over":1, "Obese":2}
 
 # Age: RRs vs 30–59 from Hamilton (male+female combined incidences)
-age_RR = {"30–59":1.00, "60–69":6.5217, "70–79":12.1739, "80+":15.2174}
-age_x  = {k: math.log(v) for k,v in age_RR.items()}
-beta_age = 1.0
+age_RR = {"30–59":1.00, "60–69":6.5217, "70–79":12.1739, "80+":15.2174} # WHERE'S THIS VALUE FROM?
+age_x  = {k: math.log(v) for k,v in age_RR.items()} 
+beta_age = 1.0 # WHY IS THIS VALUE 1?
 
 # Hypertension RR ~1.15 (meta-analysis)
 beta_htn = math.log(1.15)
 
 # Smoking RRs vs Never (Botteri 2020 paragraph you provided)
 smoke_RR = {"Never":1.00, "Former":1.17, "Current":1.14}
-smoke_x  = {k: math.log(v) for k,v in smoke_RR.items()}
-beta_smoke = 1.0
+smoke_x  = {k: math.log(v) for k,v in smoke_RR.items()} 
+beta_smoke = 1.0 # WHY IS THIS VALUE 1?
 
 # Alcohol High vs Low RR ~1.50 (meta-analysis)
 beta_alc = math.log(1.50)
@@ -225,6 +225,8 @@ p_sym_crc = {"ChangeBowel":87.6,"Distress":75.8,"Pain":73.9,
              "WeightLoss":62.1,"Fatigue":56.7,"Nausea":33.9,"Vomiting":26.7}
 p_sym_not = {"ChangeBowel":8.6,"Distress":12.1,"Pain":14.0,
              "WeightLoss":7.3,"Fatigue":18.5,"Nausea":5.2,"Vomiting":3.1}
+
+# WHAT'S GOING ON HERE?
 for s in sym_names:
     p1 = p_sym_crc[s]/100.0; q1 = p_sym_not[s]/100.0
     pot = gum.Potential().add(idg.variable("CRC")).add(idg.variable(s))
