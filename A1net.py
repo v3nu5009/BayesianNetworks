@@ -2,6 +2,7 @@
 import pyagrum as gum
 import math
 from itertools import product
+import pyagrum.lib.notebook as gnb
 
 # -------------------------
 # Helpers
@@ -365,7 +366,7 @@ for i_crc, crc_lab in enumerate(["No", "Yes"]):
 
 # Assign the utility table to the model
 idg.utility(id_utility).fillWith(uPot)
-
+gnb.showInfluenceDiagram(idg)
 
 # -------------------------
 # 9) Example inference
